@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>疊鴨子平衡挑戰 (Stack the Ducks)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); /* 天空背景 */
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            touch-action: none; /* 防止手機滑動頁面 */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* UI 通用樣式 */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none; /* 讓點擊穿透到 Canvas，除非是按鈕 */
+            z-index: 10;
+        }
+
+        .active-ui {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(2px);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* 按鈕樣式 */
+        .btn {
+            background: #FFD700;
+            border: 4px solid #FFF;
+            border-radius: 50px;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #5D4037;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #Fbc02d, 0 10px 10px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+            margin-top: 20px;
+            text-shadow: 1px 1px 0 #FFF;
+        }
+
+        .btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #Fbc02d, 0 4px 4px rgba(0,0,0,0.2);
+        }
+
+        /* 標題與文字 */
+        h1 {
+            font-size: 48px;
+            color: #FFF;
+            text-shadow: 3px 3px 0 #FFA000, 6px 6px 0 rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: #5D4037;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            z-index: 5;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .tutorial-text {
+            position: absolute;
+            top: 20%;
+            width: 100%;
+            text-align: center;
+            color: #5D4037;
+            font-size: 20px;
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0.8;
+            animation: pulse 2s infinite;
+        }
+
+        .level-indicator {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            font-size: 18px;
+            color: #FF5722;
+            font-weight: bold;
+            display: none;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        /* 結算畫面 */
+        #result-box {
+            background: #FFF;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            max-width: 80%;
+        }
+        
+        #result-score {
+            font-size: 60px;
+            color: #FF5722;
+            margin: 10px 0;
+            font-weight: 900;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="score-display">層數: <span id="score">0</span></div>
+    <div class="level-indicator" id="level-msg">難度增加!</div>
+    
+    <div id="tutorial" class="tutorial-text hidden">左右滑動瞄準，放開丟下小鴨</div>
+
+    <div id="start-screen" class="ui-layer active-ui">
+        <h1>疊鴨子<br>平衡挑戰</h1>
+        <button class="btn" onclick="startGame()">開始遊戲</button>
+    </div>
+
+    <div id="game-over-screen" class="ui-layer hidden">
+        <div id="result-box">
+            <h2>Oops! 倒塌了!</h2>
+            <div>本次成績</div>
+            <div id="result-score">0</div>
+            <div>層</div>
+            <button class="btn" onclick="resetGame()">再玩一次</button>
+            <br><br>
+            <button class="btn" style="background:#4CAF50; font-size:16px; padding:10px 20px;" onclick="alert('假裝已經分享截圖了！')">拍照分享</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 遊戲引擎設定 (Matter.js) ---
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Composite = Matter.Composite,
+          Events = Matter.Events,
+          Mouse = Matter.Mouse,
+          MouseConstraint = Matter.MouseConstraint,
+          Vector = Matter.Vector;
+
+    // 變數
+    let engine, render, runner;
+    let ground;
+    let currentDuck = null;
+    let ducks = [];
+    let isGameRunning = false;
+    let score = 0;
+    let canSpawn = true;
+    let viewportOffset = 0; // 鏡頭垂直偏移量
+
+    const colors = {
+        yellow: { fill: '#FFEB3B', stroke: '#FBC02D', type: 'yellow' },
+        green:  { fill: '#8BC34A', stroke: '#689F38', type: 'green' },
+        blue:   { fill: '#4FC3F7', stroke: '#0288D1', type: 'blue' },
+        red:    { fill: '#FF7043', stroke: '#D84315', type: 'red' },
+        pink:   { fill: '#F48FB1', stroke: '#C2185B', type: 'pink' }
+    };
+
+    // 初始化遊戲
+    function init() {
+        const container = document.getElementById('game-container');
+        
+        // 創建引擎
+        engine = Engine.create();
+        
+        // 創建渲染器
+        render = Render.create({
+            element: container,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false,
+                background: 'transparent' // 使用 CSS 背景
+            }
+        });
+
+        // 自定義渲染鴨子
+        Events.on(render, 'afterRender', function() {
+            const context = render.context;
+            const bodies = Composite.allBodies(engine.world);
+
+            for (let i = 0; i < bodies.length; i += 1) {
+                const body = bodies[i];
+                if (body.label === 'Duck' || body.label === 'PreviewDuck') {
+                    drawDuckFace(context, body);
+                }
+            }
+        });
+
+        // 創建邊界與地板
+        createBoundaries();
+
+        // 運行
+        Render.run(render);
+        runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // 監聽輸入 (滑鼠/觸控)
+        const gameCanvas = render.canvas;
+        
+        // 處理滑鼠/觸控移動 (瞄準)
+        const handleMove = (x) => {
+            if (!isGameRunning || !currentDuck || !canSpawn) return;
+            // 限制移動範圍
+            const limit = window.innerWidth / 2 - 20;
+            let targetX = x;
+            // 確保鴨子跟隨游標，但有一個固定的頂部高度 (考慮鏡頭偏移)
+            Matter.Body.setPosition(currentDuck, {
+                x: targetX,
+                y: 100 - viewportOffset 
+            });
+            Matter.Body.setVelocity(currentDuck, { x: 0, y: 0 }); // 防止在瞄準時產生動量
+        };
+
+        // 處理放開 (丟下)
+        const handleRelease = () => {
+            if (!isGameRunning || !currentDuck || !canSpawn) return;
+            
+            canSpawn = false;
+            document.getElementById('tutorial').classList.add('hidden'); // 隱藏教學
+
+            // 讓鴨子變成受重力影響
+            currentDuck.isStatic = false; 
+            currentDuck.label = 'Duck'; // 標記為正式鴨子
+            ducks.push(currentDuck);
+
+            // 給予一點點隨機旋轉，增加樂趣
+            Matter.Body.setAngularVelocity(currentDuck, (Math.random() - 0.5) * 0.05);
+
+            currentDuck = null;
+
+            // 檢查是否結束 & 生成下一隻
+            setTimeout(() => {
+                checkGameState();
+            }, 1000); // 1秒後檢查狀態並生成
+        };
+
+        // 綁定事件
+        gameCanvas.addEventListener('mousemove', e => handleMove(e.clientX));
+        gameCanvas.addEventListener('touchmove', e => {
+            e.preventDefault(); // 防止滾動
+            handleMove(e.touches[0].clientX);
+        }, { passive: false });
+
+        gameCanvas.addEventListener('mouseup', handleRelease);
+        gameCanvas.addEventListener('touchend', handleRelease);
+
+        // 遊戲循環檢查 (掉落檢測)
+        Events.on(engine, 'beforeUpdate', function() {
+            if (!isGameRunning) return;
+
+            // 檢查有沒有鴨子掉出螢幕下方
+            ducks.forEach(duck => {
+                // 這裡的座標是絕對座標
+                if (duck.position.y > window.innerHeight + 100 - viewportOffset) {
+                    gameOver();
+                }
+            });
+            
+            // 簡單的鏡頭跟隨邏輯
+            updateCamera();
+        });
+    }
+
+    // 繪製鴨子臉部 (Canvas API)
+    function drawDuckFace(ctx, body) {
+        const radius = body.circleRadius;
+        const x = body.position.x;
+        const y = body.position.y;
+        const angle = body.angle;
+
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+
+        // 眼睛
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.3, -radius * 0.1, radius * 0.1, 0, 2 * Math.PI); // 左眼
+        ctx.arc(radius * 0.3, -radius * 0.1, radius * 0.1, 0, 2 * Math.PI);  // 右眼
+        ctx.fill();
+
+        // 嘴巴
+        ctx.fillStyle = '#FF9800';
+        ctx.beginPath();
+        ctx.ellipse(0, radius * 0.2, radius * 0.2, radius * 0.15, 0, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 腮紅 (可愛感)
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.arc(-radius * 0.5, radius * 0.1, radius * 0.15, 0, 2 * Math.PI);
+        ctx.arc(radius * 0.5, radius * 0.1, radius * 0.15, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // 特殊特徵
+        if (body.duckType === 'green') {
+            // 頭頂葉子
+            ctx.fillStyle = '#4CAF50';
+            ctx.beginPath();
+            ctx.ellipse(0, -radius, radius * 0.2, radius * 0.4, 0, 0, 2 * Math.PI);
+            ctx.fill();
+        } else if (body.duckType === 'red') {
+            // 火焰/怒氣
+            ctx.strokeStyle = '#FFC107';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-radius * 0.3, -radius * 0.9);
+            ctx.lineTo(0, -radius * 1.2);
+            ctx.lineTo(radius * 0.3, -radius * 0.9);
+            ctx.stroke();
+        }
+
+        ctx.rotate(-angle);
+        ctx.translate(-x, -y);
+    }
+
+    function createBoundaries() {
+        // 地板 (綠色草地)
+        ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + 50, window.innerWidth, 200, { 
+            isStatic: true,
+            render: { fillStyle: '#8BC34A' }
+        });
+
+        // 為了讓草地看起來像山丘，我們畫一個圓弧
+        // 這裡簡化處理，直接用一個很大的圓形當作地板中心
+        const hill = Bodies.circle(window.innerWidth / 2, window.innerHeight + 800, 1000, {
+            isStatic: true,
+            friction: 1,
+            render: { fillStyle: '#7CB342' }
+        });
+
+        Composite.add(engine.world, [hill]);
+    }
+
+    function spawnNewDuck() {
+        if (!isGameRunning) return;
+
+        // 根據分數決定出現的鴨子種類 (難度增加)
+        let typeKeys = ['yellow', 'yellow', 'green']; // 基礎
+        if (score > 3) typeKeys.push('green', 'blue');
+        if (score > 6) typeKeys.push('red', 'pink');
+        if (score > 10) typeKeys.push('red', 'red');
+
+        const randomKey = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+        const style = colors[randomKey];
+        
+        // 隨機大小 (增加難度)
+        const baseSize = 35; 
+        const randomScale = 0.9 + Math.random() * 0.3; // 0.9 ~ 1.2倍
+        const radius = baseSize * randomScale;
+
+        // 生成在頂部中間
+        currentDuck = Bodies.circle(window.innerWidth / 2, 100 - viewportOffset, radius, {
+            isStatic: true, // 一開始是靜止的（瞄準狀態）
+            restitution: 0.3, // 彈性
+            friction: 0.8,    // 摩擦力 (防滑)
+            density: 0.005,   // 密度
+            label: 'PreviewDuck',
+            duckType: style.type,
+            render: {
+                fillStyle: style.fill,
+                strokeStyle: style.stroke,
+                lineWidth: 3
+            }
+        });
+
+        Composite.add(engine.world, currentDuck);
+        canSpawn = true;
+    }
+
+    function checkGameState() {
+        if (!isGameRunning) return;
+
+        // 簡單計算分數：場上還存活的鴨子數量 - 1 (不包含剛生成的)
+        // 更精確的應該是計算高度，但為了簡單，用數量代替層數
+        const activeDucks = ducks.filter(d => d.position.y < window.innerHeight + 200);
+        
+        // 如果鴨子掉得太遠，可能已經 Game Over 了，這裡只更新分數
+        score = activeDucks.length;
+        document.getElementById('score').innerText = score;
+
+        // 難度提示
+        if (score === 5 || score === 10) {
+            const levelMsg = document.getElementById('level-msg');
+            levelMsg.style.display = 'block';
+            setTimeout(() => levelMsg.style.display = 'none', 2000);
+        }
+
+        spawnNewDuck();
+    }
+
+    function updateCamera() {
+        if (ducks.length === 0) return;
+
+        // 找出最高的鴨子 (y 最小)
+        let highestY = window.innerHeight;
+        ducks.forEach(d => {
+            if (d.position.y < highestY) highestY = d.position.y;
+        });
+
+        // 目標偏移量：讓最高的鴨子保持在螢幕中間偏下
+        const targetOffset = Math.max(0, (window.innerHeight * 0.6) - highestY);
+        
+        // 平滑移動 (Lerp)
+        viewportOffset += (targetOffset - viewportOffset) * 0.05;
+
+        // 移動整個 Render 的視角
+        Render.lookAt(render, {
+            min: { x: 0, y: -viewportOffset },
+            max: { x: window.innerWidth, y: window.innerHeight - viewportOffset }
+        });
+        
+        // 修正地板位置 (如果需要地板看起來無限深，這裡可能不需要動，因為我們希望地板遠離)
+        // 但為了視覺效果，我們只讓鏡頭往上看
+    }
+
+    function startGame() {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('start-screen').classList.remove('active-ui');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('tutorial').classList.remove('hidden');
+        
+        isGameRunning = true;
+        score = 0;
+        document.getElementById('score').innerText = score;
+        ducks = [];
+        viewportOffset = 0;
+        
+        // 清除世界中舊的鴨子
+        Composite.clear(engine.world, false, true); // keepStatic = true (保留地板)
+        
+        // 重置鏡頭
+        Render.lookAt(render, {
+            min: { x: 0, y: 0 },
+            max: { x: window.innerWidth, y: window.innerHeight }
+        });
+
+        // 確保地板還在
+        Composite.add(engine.world, [ground]); // 這裡可能會重複添加，比較嚴謹的做法是把地板存在變數不清除
+
+        spawnNewDuck();
+    }
+
+    function resetGame() {
+        // 簡單重整頁面或重置邏輯，這裡選擇呼叫 startGame
+        startGame();
+    }
+
+    function gameOver() {
+        if (!isGameRunning) return;
+        isGameRunning = false;
+        
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        document.getElementById('game-over-screen').classList.add('active-ui');
+        document.getElementById('result-score').innerText = score;
+    }
+
+    // 啟動初始化
+    window.onload = init;
+    window.onresize = () => {
+        // 處理視窗縮放
+        render.canvas.width = window.innerWidth;
+        render.canvas.height = window.innerHeight;
+    };
+
+</script>
+
+</body>
+</html>
