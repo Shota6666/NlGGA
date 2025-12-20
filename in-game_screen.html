@@ -138,11 +138,11 @@
       camera.lookAt(0, 30, 0);
 
       const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-      hemiLight.position.set(0, 200, 0);
+      hemiLight.position.set(0, 1000, 0); // Moved up to 1000
       scene.add(hemiLight);
 
       const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      dirLight.position.set(0, 200, 100);
+      dirLight.position.set(100, 1000, 100); // Moved up to 1000 and angled
       dirLight.castShadow = true;
       scene.add(dirLight);
 
@@ -221,10 +221,29 @@
           object.position.y -= center.y * scale;
           object.position.y -= (size.y * scale) / 2;
 
+          // Manual Material Assignment for missing textures
+          let color = 0xffcc00; // Default Yellow
+          if (path.includes('green')) color = 0x4caf50;
+          if (path.includes('blue')) color = 0x2196f3;
+          if (path.includes('cute')) color = 0xffea00; // Bright Yellow for "cute"
+
+          // Emergency Fix: Use MeshBasicMaterial (Unlit)
+          // This ignores lighting completely. If this is black, the geometry is broken.
+          const material = new THREE.MeshBasicMaterial({
+            color: color
+          });
+
           object.traverse(function (child) {
             if (child.isMesh) {
+              // Forcefully replace material
+              child.material = material;
+
+              // Ensure shadows and other properties
               child.castShadow = true;
               child.receiveShadow = true;
+
+              // Debugging
+              console.log(`Applied color ${color.toString(16)} to mesh: ${child.name}`);
             }
           });
 
