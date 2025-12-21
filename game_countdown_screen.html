@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Game Countdown Screen</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&amp;display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#FFC82C", // The vibrant yellow from the UI
+            secondary: "#FF9F1C", // Orange accent from the ducks
+            "background-light": "#FFFFFF",
+            "background-dark": "#18181b",
+            "text-light": "#4B5563",
+            "text-dark": "#E5E7EB",
+          },
+          fontFamily: {
+            display: ['"Noto Sans TC"', 'sans-serif'],
+          },
+          borderRadius: {
+            DEFAULT: "1rem",
+            "xl": "1.5rem",
+            "2xl": "2rem",
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'bounce-slight': 'bounce 2s infinite',
+          }
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      overflow: hidden;
+    }
+
+    .game-border {
+      border: 3px solid #FFC82C;
+    }
+
+    .bg-pattern {
+      background-color: #ffffff;
+      background-image: radial-gradient(#FFC82C 0.8px, transparent 0.8px), radial-gradient(#FFC82C 0.8px, #ffffff 0.8px);
+      background-size: 32px 32px;
+      background-position: 0 0, 16px 16px;
+      opacity: 0.1;
+    }
+
+    .dark .bg-pattern {
+      background-color: #18181b;
+      background-image: radial-gradient(#FFC82C 0.8px, transparent 0.8px), radial-gradient(#FFC82C 0.8px, #18181b 0.8px);
+    }
+  </style>
+  <style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+
+<body
+  class="bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark h-screen flex flex-col items-center justify-center p-6 relative">
+  <div class="absolute inset-0 z-0 bg-pattern pointer-events-none"></div>
+  <main class="relative z-10 w-full max-w-sm h-full max-h-[800px] flex flex-col">
+    <div
+      class="flex-grow game-border rounded-3xl flex flex-col items-center justify-center relative bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-xl transition-colors duration-300">
+      <div class="absolute top-12 left-8 opacity-40 animate-bounce-slight" style="animation-delay: 0s;">
+        <span class="material-icons text-primary text-4xl transform -rotate-12">cloud</span>
+      </div>
+      <div class="absolute bottom-20 right-8 opacity-40 animate-bounce-slight" style="animation-delay: 1s;">
+        <span class="material-icons text-secondary text-3xl transform rotate-12">filter_vintage</span>
+      </div>
+      <div class="flex flex-col items-center gap-6">
+        <div class="flex flex-col items-center animate-pulse-fast">
+          <span class="text-primary font-bold text-xl tracking-wider uppercase mb-2">Level 0</span>
+          <h1 class="text-6xl font-black text-primary tracking-tight text-shadow-sm">
+            準備
+          </h1>
+        </div>
+        <p class="text-gray-400 dark:text-gray-500 text-sm font-medium mt-4 text-center max-w-[200px]">
+          請將手機對準平面<br />尋找適合堆疊的地方
+        </p>
+        <div class="mt-8">
+          <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-6 flex justify-center">
+      <button
+        class="text-gray-400 dark:text-gray-600 text-sm font-medium flex items-center gap-1 hover:text-primary transition-colors">
+        <span class="material-icons text-sm">help_outline</span> 怎麼玩?
+      </button>
+    </div>
+  </main>
+
+  <script>
+    setTimeout(function () {
+      window.location.href = 'in-game_screen.html';
+    }, 3000);
+  </script>
+</body>
+
+</html>
