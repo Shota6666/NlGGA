@@ -15,10 +15,10 @@
       theme: {
         extend: {
           colors: {
-            primary: "#FFCC00", // Extracted yellow from the duck/ui
-            secondary: "#FF9900", // Orange accent
-            "background-light": "#FFFBEB", // Very light yellow/warm white
-            "background-dark": "#1F1F1F", // Dark grey for dark mode
+            primary: "#FFCC00",
+            secondary: "#FF9900",
+            "background-light": "#FFFBEB",
+            "background-dark": "#1F1F1F",
             "surface-light": "rgba(255, 255, 255, 0.6)",
             "surface-dark": "rgba(0, 0, 0, 0.4)",
           },
@@ -40,17 +40,9 @@
   </script>
   <style>
     @keyframes float {
-      0% {
-        transform: translateY(0px);
-      }
-
-      50% {
-        transform: translateY(-10px);
-      }
-
-      100% {
-        transform: translateY(0px);
-      }
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
     }
 
     .ar-duck {
@@ -70,26 +62,12 @@
     }
 
     @keyframes scan {
-      0% {
-        transform: translateY(-200px);
-        opacity: 0;
-      }
-
-      10% {
-        opacity: 1;
-      }
-
-      90% {
-        opacity: 1;
-      }
-
-      100% {
-        transform: translateY(200px);
-        opacity: 0;
-      }
+      0% { transform: translateY(-200px); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(200px); opacity: 0; }
     }
-  </style>
-  <style>
+
     body {
       min-height: 100dvh;
       height: 100dvh;
@@ -102,7 +80,6 @@
       width: 100%;
       height: 100%;
       z-index: 1;
-      /* Above background gradient, below UI */
     }
   </style>
   <script type="importmap">
@@ -130,9 +107,9 @@
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      // --- Three.js Setup ---
+      // --- 1. Three.js Setup ---
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 3000);
       const initialCameraPos = new THREE.Vector3(0, 100, 400);
       const targetCameraPos = initialCameraPos.clone();
       camera.position.copy(initialCameraPos);
@@ -141,15 +118,13 @@
       // AR Background Setup
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const video = document.createElement('video');
-        video.playsInline = true; // Important for iOS
+        video.playsInline = true;
         video.autoplay = true;
         video.muted = true;
         video.style.display = 'none';
 
         const constraints = {
-          video: {
-            facingMode: 'environment' // Use back camera
-          },
+          video: { facingMode: 'environment' },
           audio: false
         };
 
@@ -157,26 +132,25 @@
           .then(function (stream) {
             video.srcObject = stream;
             video.play();
-
             const texture = new THREE.VideoTexture(video);
             texture.colorSpace = THREE.SRGBColorSpace;
             scene.background = texture;
           })
           .catch(function (err) {
             console.error('AR Error:', err);
-            // Fallback to transparent/basic background if camera fails
             scene.background = new THREE.Color(0xf0f0f0);
           });
       } else {
         scene.background = new THREE.Color(0xf0f0f0);
       }
 
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-      hemiLight.position.set(0, 1000, 0); // Moved up to 1000
+      // --- 修改：增強燈光 (Brighten Models) ---
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.5); // 強度提升到 2.5
+      hemiLight.position.set(0, 1000, 0);
       scene.add(hemiLight);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      dirLight.position.set(100, 1000, 100); // Moved up to 1000 and angled
+      const dirLight = new THREE.DirectionalLight(0xffffff, 2.0); // 強度提升到 2.0
+      dirLight.position.set(100, 1000, 100);
       dirLight.castShadow = true;
       scene.add(dirLight);
 
@@ -184,111 +158,199 @@
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
+      renderer.outputColorSpace = THREE.SRGBColorSpace; // 確保色彩鮮豔
       container.appendChild(renderer.domElement);
 
       // --- Cannon.js Physics Setup ---
       const world = new CANNON.World({
-        gravity: new CANNON.Vec3(0, -9.82 * 20, 0), // Scaled gravity
+        gravity: new CANNON.Vec3(0, -9.82 * 20, 0),
       });
 
-      // Materials
       const defaultMaterial = new CANNON.Material('default');
       const defaultContactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
-        friction: 1000.0,    // EXTREEEME friction
-        restitution: 0.0,   // No bounce
-        contactEquationStiffness: 1e8, // Stiff contacts
+        friction: 1000.0,
+        restitution: 0.0,
+        contactEquationStiffness: 1e8,
         contactEquationRelaxation: 3,
       });
       world.addContactMaterial(defaultContactMaterial);
 
-      // Ground Body (Finite Platform)
-      // 100x100 size (halfExtent = 50, 1, 50)
       const groundShape = new CANNON.Box(new CANNON.Vec3(50, 5, 50));
       const groundBody = new CANNON.Body({
         type: CANNON.Body.STATIC,
         shape: groundShape,
         material: defaultMaterial
       });
-      // Position at Y = -30, but box origin is center, so top face is at -30 + 5 = -25?
-      // Let's position center at -35 so top face is around -30.
       groundBody.position.set(0, -35, 0);
       world.addBody(groundBody);
 
+      // --- 修改：軌跡與粒子系統 (Trail System & White BG Removal) ---
+      
+      const textureLoader = new THREE.TextureLoader();
+      const trailTextures = {
+        leaf: textureLoader.load('leaf.png'),
+        water: textureLoader.load('water.png'),
+        fire: textureLoader.load('fire.png')
+      };
+
+      let particles = [];
+      
+      // 自定義 Shader：自動去除白色背景 (Chroma Key)
+      function createChromaKeyMaterial(texture) {
+        return new THREE.ShaderMaterial({
+          uniforms: {
+            pointTexture: { value: texture },
+            opacity: { value: 1.0 }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D pointTexture;
+            uniform float opacity;
+            varying vec2 vUv;
+            void main() {
+              vec4 color = texture2D(pointTexture, vUv);
+              // 計算像素亮度
+              float brightness = (color.r + color.g + color.b) / 3.0;
+              // 如果接近純白 (亮度 > 0.85)，則視為透明
+              if (brightness > 0.85) discard;
+              gl_FragColor = vec4(color.rgb, color.a * opacity);
+            }
+          `,
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+      }
+
+      const trailMaterials = {
+        leaf: createChromaKeyMaterial(trailTextures.leaf),
+        water: createChromaKeyMaterial(trailTextures.water),
+        fire: createChromaKeyMaterial(trailTextures.fire)
+      };
+
+      function spawnParticle(pos, type) {
+        if (!trailMaterials[type]) return;
+
+        const geometry = new THREE.PlaneGeometry(12, 12); // 稍微放大粒子
+        const material = trailMaterials[type].clone();
+        const mesh = new THREE.Mesh(geometry, material);
+
+        // 位置隨機擾動
+        mesh.position.copy(pos);
+        mesh.position.x += (Math.random() - 0.5) * 5;
+        mesh.position.z += (Math.random() - 0.5) * 5;
+        mesh.position.y += (Math.random() - 0.5) * 5;
+        mesh.lookAt(camera.position);
+
+        scene.add(mesh);
+
+        particles.push({
+          mesh: mesh,
+          life: 1.0,
+          decay: 0.04 // 消失速度
+        });
+      }
+
+      function updateTrails() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= p.decay;
+          
+          p.mesh.material.uniforms.opacity.value = p.life;
+          p.mesh.position.y += 0.3; // 向上飄動
+          
+          const scale = 1 + (1 - p.life) * 0.5;
+          p.mesh.scale.set(scale, scale, scale);
+          p.mesh.lookAt(camera.position);
+
+          if (p.life <= 0) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            particles.splice(i, 1);
+          }
+        }
+      }
+
+      function updateLineTrail(duck) {
+        if (!duck.trailLine || !duck.mesh) return;
+        
+        duck.trailHistory.push(duck.mesh.position.clone());
+        if (duck.trailHistory.length > 25) {
+            duck.trailHistory.shift();
+        }
+
+        if (duck.trailHistory.length > 1) {
+            duck.trailLine.geometry.setFromPoints(duck.trailHistory);
+            duck.trailLine.visible = true;
+        } else {
+            duck.trailLine.visible = false;
+        }
+      }
+
       // --- Game Logic ---
       let loadedModels = [];
+      let modelTypes = []; 
       let ducks = [];
       let gameOver = false;
       let isPaused = false;
       let score = 0;
       let level = 1;
-      const failThreshold = -100; // Y position to trigger game over
+      const failThreshold = -100;
 
       const spawnHeight = 350;
       const duckScaleTarget = 70;
 
-      // Control Variables
       let currentDropX = 0;
       let isAiming = false;
       let startDragX = 0;
       let baseDropX = 0;
-      // Sensitivity: How much the line moves per pixel of drag
       const sensitivity = 0.4;
-
-
-      const raycaster = new THREE.Raycaster();
-      const mouse = new THREE.Vector2();
-
-      // --- Audio Setup ---
-      // Background Music
-      const bgm = new Audio('music/game_music.m4a');
+const bgm = new Audio('music/game_music.m4a');
       bgm.loop = true;
       bgm.volume = 0.5;
-      // Attempt to play immediately, but might be blocked until interaction
       bgm.play().catch(e => {
-        console.log("BGM play blocked, waiting for interaction");
-        document.addEventListener('click', () => {
-          bgm.play().catch(console.error);
-        }, { once: true });
-        document.addEventListener('touchstart', () => {
-          bgm.play().catch(console.error);
-        }, { once: true });
+        document.addEventListener('click', () => { bgm.play().catch(console.error); }, { once: true });
+        document.addEventListener('touchstart', () => { bgm.play().catch(console.error); }, { once: true });
       });
 
-      // Collision Sound
       const collisionSound = new Audio('music/duck.m4a');
       collisionSound.volume = 0.8;
-
       const playCollisionSound = () => {
-        // Clone to allow overlapping sounds
         const sound = collisionSound.cloneNode();
-        sound.volume = 0.6 + Math.random() * 0.4; // Vary volume slightly
+        sound.volume = 0.6 + Math.random() * 0.4;
         sound.play().catch(() => { });
       };
 
-
-      // Guide Line Visual
       const lineGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 1000, 0),
         new THREE.Vector3(0, -1000, 0)
       ]);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
       const guideLine = new THREE.Line(lineGeometry, lineMaterial);
-      guideLine.visible = false; // Hidden until aiming
+      guideLine.visible = false;
       scene.add(guideLine);
 
-      // Load Models
+      // --- Model Loading with Mapping ---
       const loader = new FBXLoader();
-      const modelPaths = [
-        'Model/cute+chick+3d+model.fbx',
-        'Model/yellow+chick+toy+3d+model.fbx',
-        'Model/green+chick+3d+model.fbx',
-        'Model/blue+ice+chick+3d+model.fbx'
+      
+      // 定義模型路徑與特效類型的對應
+      const modelConfig = [
+        { path: 'Model/cute+chick+3d+model.fbx', type: 'fire' },   // 紅色 -> Fire
+        { path: 'Model/yellow+chick+toy+3d+model.fbx', type: 'line' }, // 黃色 -> Line
+        { path: 'Model/green+chick+3d+model.fbx', type: 'leaf' },  // 綠色 -> Leaf
+        { path: 'Model/blue+ice+chick+3d+model.fbx', type: 'water' } // 藍色 -> Water
       ];
 
       let loadedCount = 0;
-      modelPaths.forEach(path => {
-        loader.load(path, function (object) {
-          console.log(`Model loaded: ${path}`);
+      modelConfig.forEach((config, index) => {
+        loader.load(config.path, function (object) {
+          console.log(`Model loaded: ${config.path}`);
 
           const box = new THREE.Box3().setFromObject(object);
           const size = box.getSize(new THREE.Vector3());
@@ -296,43 +358,42 @@
           const scale = duckScaleTarget / maxAxis;
 
           object.scale.setScalar(scale);
-
-          // Center visual pivot
           const center = box.getCenter(new THREE.Vector3());
           object.position.x -= center.x * scale;
           object.position.z -= center.z * scale;
           object.position.y -= center.y * scale;
           object.position.y -= (size.y * scale) / 2;
 
-          // Original textures/materials from FBX
           object.traverse(function (child) {
             if (child.isMesh) {
-              // Ensure shadows are enabled
               child.castShadow = true;
               child.receiveShadow = true;
-
-              // Optional: Ensure materials handle lighting if they were unlit before
-              // If the original material is too dark, we might need to adjust it, 
-              // but user asked for original.
+              
+              // --- 修改：增加自發光，避免角色太暗 ---
+              if (child.material) {
+                child.material.emissive = new THREE.Color(0x666666); 
+                child.material.emissiveIntensity = 0.4;
+                child.material.needsUpdate = true;
+              }
             }
           });
 
-          loadedModels.push(object);
+          loadedModels[index] = object;
+          modelTypes[index] = config.type;
+          
           loadedCount++;
-
-          if (loadedCount === modelPaths.length) {
+          if (loadedCount === modelConfig.length) {
             console.log("All models loaded!");
           }
 
         }, undefined, function (error) {
-          console.error(`An error happened loading ${path}:`, error);
+          console.error(`Error loading ${config.path}:`, error);
         });
       });
 
       function spawnDuck() {
-        if (loadedModels.length === 0 || gameOver) return;
+        if (loadedCount < modelConfig.length || gameOver) return;
 
-        // Physics Body
         const shape = new CANNON.Box(new CANNON.Vec3(25, 30, 25));
         const body = new CANNON.Body({
           mass: 1,
@@ -345,25 +406,15 @@
         const zoomFactor = Math.floor(score / 4);
         const currentSpawnHeight = spawnHeight + (zoomFactor * 250);
 
-        body.position.set(
-          currentDropX, // USES JOYSTICK CONTROLLED X
-          currentSpawnHeight,
-          0
-        );
-        // Face Camera: Adjusted to -90 degrees (-Math.PI / 2)
+        body.position.set(currentDropX, currentSpawnHeight, 0);
         const baseRotation = -Math.PI / 2;
         const randomY = baseRotation + (Math.random() - 0.5) * 0.2;
         const randomTilt = (Math.random() - 0.5) * 0.2;
         body.quaternion.setFromEuler(randomTilt, randomY, randomTilt);
 
-        // Collision Event
         let lastCollisionTime = 0;
         body.addEventListener('collide', (e) => {
-          // Check if we hit the ground
           if (e.body === groundBody) return;
-
-          // Check if we hit another duck (basic check: assume anything not ground is duck for now)
-          // Debounce: prevent rapid fire sounds for the same collision event sequence
           const now = Date.now();
           if (now - lastCollisionTime > 200) {
             playCollisionSound();
@@ -373,61 +424,64 @@
 
         world.addBody(body);
 
-        // Visual Mesh - Random Selection
-        const randomModel = loadedModels[Math.floor(Math.random() * loadedModels.length)];
+        const randIndex = Math.floor(Math.random() * loadedModels.length);
+        const randomModel = loadedModels[randIndex];
+        const effectType = modelTypes[randIndex];
+
         const mesh = randomModel.clone();
         scene.add(mesh);
-        ducks.push({ mesh, body });
 
-        // Update Score & Level
+        const duckObj = { mesh, body, type: effectType };
+
+        // Setup for line trail
+        if (effectType === 'line') {
+             duckObj.trailHistory = [];
+             // 建立一條白色的線
+             const trailGeo = new THREE.BufferGeometry();
+             const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 3 });
+             const trailLine = new THREE.Line(trailGeo, trailMat);
+             scene.add(trailLine);
+             duckObj.trailLine = trailLine;
+        }
+
+        ducks.push(duckObj);
+
         score++;
         level = Math.floor(score / 4) + 1;
 
         const scoreDisplay = document.getElementById('score-display');
         const levelDisplay = document.getElementById('level-display');
-
         if (scoreDisplay) scoreDisplay.textContent = score;
         if (levelDisplay) levelDisplay.textContent = level < 10 ? '0' + level : level;
 
-        // Update Camera Target - Move Up and Back every 4 layers
         targetCameraPos.z = initialCameraPos.z + (zoomFactor * 300);
         targetCameraPos.y = initialCameraPos.y + (zoomFactor * 250);
       }
 
-      // --- Joystick / Drop Logic ---
-
       function startAim(event) {
         if (gameOver || isPaused) return;
-        event.preventDefault(); // Prevent scrolling/selecting
-
+        event.preventDefault();
         isAiming = true;
         guideLine.visible = true;
-
         if (event.touches) {
           startDragX = event.touches[0].clientX;
         } else {
           startDragX = event.clientX;
         }
-        baseDropX = currentDropX; // relative to where we last were, or could reset to 0
+        baseDropX = currentDropX;
       }
 
       function moveAim(event) {
         if (!isAiming || gameOver || isPaused) return;
-
         let clientX;
         if (event.touches) {
           clientX = event.touches[0].clientX;
         } else {
           clientX = event.clientX;
         }
-
         const deltaX = clientX - startDragX;
-        // Calculate new X based on delta
         let newX = baseDropX + (deltaX * sensitivity);
-
-        // Clamp to platform range (+/- 45 safe zone)
         newX = Math.max(-45, Math.min(45, newX));
-
         currentDropX = newX;
         guideLine.position.x = currentDropX;
       }
@@ -436,37 +490,28 @@
         if (!isAiming) return;
         isAiming = false;
         guideLine.visible = false;
-
         spawnDuck();
       }
 
       const dropBtn = document.getElementById('btn-drop');
       if (dropBtn) {
-        // Touch Events
         dropBtn.addEventListener('touchstart', startAim, { passive: false });
         window.addEventListener('touchmove', moveAim, { passive: false });
         window.addEventListener('touchend', endAim);
-
-        // Mouse Events
         dropBtn.addEventListener('mousedown', startAim);
         window.addEventListener('mousemove', moveAim);
         window.addEventListener('mouseup', endAim);
       }
 
-      // --- UI Interactions ---
-
-      // Pause Button
       const pauseBtn = document.getElementById('btn-pause');
       const pauseOverlay = document.getElementById('pause-overlay');
       const resumeBtn = document.getElementById('btn-resume');
-
       if (pauseBtn && pauseOverlay) {
         pauseBtn.addEventListener('click', () => {
           isPaused = true;
           pauseOverlay.classList.remove('hidden');
         });
       }
-
       if (resumeBtn && pauseOverlay) {
         resumeBtn.addEventListener('click', () => {
           isPaused = false;
@@ -474,7 +519,6 @@
         });
       }
 
-      // Reset Button
       const resetBtn = document.getElementById('btn-reset');
       if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -482,7 +526,6 @@
         });
       }
 
-      // Screenshot Button
       const screenshotBtn = document.getElementById('btn-screenshot');
       if (screenshotBtn) {
         screenshotBtn.addEventListener('click', () => {
@@ -504,27 +547,44 @@
       });
 
       const timeStep = 1 / 60;
+      let frameCount = 0;
+
       function animate() {
         if (gameOver) return;
-
         requestAnimationFrame(animate);
 
-        // Smooth Camera Zoom
         camera.position.lerp(targetCameraPos, 0.05);
 
-        world.step(timeStep);
+        if (!isPaused) {
+            world.step(timeStep);
+            
+            updateTrails(); // 更新所有粒子效果
 
-        ducks.forEach(duck => {
-          duck.mesh.position.copy(duck.body.position);
-          duck.mesh.quaternion.copy(duck.body.quaternion);
+            ducks.forEach(duck => {
+              duck.mesh.position.copy(duck.body.position);
+              duck.mesh.quaternion.copy(duck.body.quaternion);
+              
+              // 檢查移動速度
+              const vel = duck.body.velocity;
+              const speed = Math.sqrt(vel.x*vel.x + vel.y*vel.y + vel.z*vel.z);
 
-          // Game Over Check
-          if (duck.body.position.y < failThreshold) {
-            console.log("Game Over!");
-            gameOver = true;
-            window.location.href = 'game_over_results.html?score=' + score;
-          }
-        });
+              // 速度夠快才產生軌跡
+              if (speed > 5) {
+                if (duck.type === 'line') {
+                    updateLineTrail(duck);
+                } else if (frameCount % 4 === 0) { // 每4幀產生一個粒子
+                    spawnParticle(duck.mesh.position.clone(), duck.type);
+                }
+              }
+
+              if (duck.body.position.y < failThreshold) {
+                console.log("Game Over!");
+                gameOver = true;
+                window.location.href = 'game_over_results.html?score=' + score;
+              }
+            });
+            frameCount++;
+        }
 
         renderer.render(scene, camera);
       }
@@ -532,15 +592,13 @@
     }
   </script>
 </head>
-
 <body
   class="bg-background-light dark:bg-background-dark font-display h-screen w-screen overflow-hidden flex flex-col relative select-none">
   <div class="absolute inset-0 z-0">
     <div id="canvas-container"></div>
-    <!-- AR Background Replaced: Video Texture takes over scene background -->
+    <!-- AR Background -->
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
       <div class="relative w-64 h-96 flex flex-col items-center justify-center">
-        <!-- Optional cosmetic overlay, but video texture is the real BG -->
       </div>
     </div>
   </div>
@@ -582,7 +640,6 @@
 
     <div class="flex-grow"></div>
     <div class="flex flex-col items-center space-y-6 pb-24 pointer-events-auto">
-      <!-- Moved padding bottom up to account for AR Button usually at bottom -->
       <div class="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full animate-bounce shadow-lg border border-white/10">
         <p class="text-white text-base font-bold tracking-wide flex items-center gap-2">
           <span class="material-icons-round text-primary text-xl">view_in_ar</span>
